@@ -268,6 +268,11 @@
     var t = this.t;
     var lights = [];
 
+    if (state === 'ending' && game.ending && game.ending.t >= 100) {
+      this.drawOutside(ctx, game);
+      return;
+    }
+
     ctx.save();
     if (this.shakeT > 0 && this.shakeMag > 0) {
       ctx.translate(Math.round((Math.random() - 0.5) * 2 * this.shakeMag), Math.round((Math.random() - 0.5) * 2 * this.shakeMag));
@@ -310,7 +315,8 @@
     }
     ctx.globalAlpha = 1;
 
-    this.drawLighting(ctx, game, lights);
+    var dark = title ? 0.55 : this.stage ? this.stage.darkness : 0.8;
+    this.drawLighting(ctx, dark, lights);
 
     if (!title) {
       this.drawHeldKeys(ctx, game);
@@ -438,15 +444,19 @@
       y = o.r * T;
       var live = o.uses > 0;
       if (o.type === 'restore') {
+        // 사진 액자: 두 사람 (엄마와 아이)
         ctx.fillStyle = '#34363b';
-        ctx.fillRect(x + 1, y + 12, 14, 4);
-        ctx.fillStyle = '#26282c';
-        ctx.fillRect(x + 4, y + 8, 8, 4);
-        var bob = live ? Math.round(Math.sin(t * 0.07) * 1.5) : 0;
-        ctx.fillStyle = live ? COL.amber : '#3c3e43';
-        ctx.fillRect(x + 7, y + 1 + bob, 2, 6);
-        ctx.fillRect(x + 5, y + 3 + bob, 6, 2);
-        if (live) lights.push({ x: x + 8, y: y + 5, r: 40, i: 0.75 });
+        ctx.fillRect(x + 4, y + 14, 8, 2);
+        ctx.fillStyle = live ? '#8a6a3a' : '#3c3e43';
+        ctx.fillRect(x + 2, y + 2, 12, 12);
+        ctx.fillStyle = live ? '#f3ead2' : '#2a2b2e';
+        ctx.fillRect(x + 3, y + 3, 10, 10);
+        ctx.fillStyle = live ? '#5a4a3a' : '#3c3e43';
+        ctx.fillRect(x + 5, y + 6, 2, 2);
+        ctx.fillRect(x + 4, y + 8, 4, 4);
+        ctx.fillRect(x + 9, y + 8, 2, 2);
+        ctx.fillRect(x + 9, y + 10, 2, 2);
+        if (live) lights.push({ x: x + 8, y: y + 8, r: 40, i: 0.75 });
       } else {
         ctx.fillStyle = '#3a2a26';
         ctx.fillRect(x + 1, y + 13, 14, 3);
@@ -527,6 +537,26 @@
       }
     }
 
+    // 기억 조각: 떠다니는 종이 한 장
+    for (i = 0; i < lv.fragments.length; i++) {
+      o = lv.fragments[i];
+      if (o.taken) continue;
+      x = o.c * T;
+      y = o.r * T + Math.round(Math.sin(t * 0.06 + i * 2) * 2);
+      var tilt = Math.round(Math.sin(t * 0.04)) ;
+      ctx.fillStyle = '#f3ead2';
+      ctx.fillRect(x + 4, y + 2 + tilt, 9, 12);
+      ctx.fillStyle = '#c9bfa6';
+      ctx.fillRect(x + 4, y + 13 + tilt, 9, 1);
+      ctx.fillStyle = '#6b6050';
+      ctx.fillRect(x + 6, y + 5 + tilt, 5, 1);
+      ctx.fillRect(x + 6, y + 7 + tilt, 4, 1);
+      ctx.fillRect(x + 6, y + 9 + tilt, 5, 1);
+      ctx.fillRect(x + 6, y + 11 + tilt, 3, 1);
+      if (t % 40 === i * 7) this.addParticle(x + 8, y + 8, (Math.random() - 0.5) * 0.4, -0.4, 40, COL.white, 1, -0.003);
+      lights.push({ x: x + 8, y: y + 8, r: 44, i: 0.85 });
+    }
+
     // 떨어진 키캡
     for (i = 0; i < lv.pickups.length; i++) {
       o = lv.pickups[i];
@@ -543,7 +573,7 @@
       var cx = cb.x + cb.w / 2;
       var cy = cb.y + cb.h / 2 + 4;
       var pulse = 0.6 + Math.sin(t * 0.05) * 0.2;
-      var bright = game.state === 'ending' && game.ending && game.ending.type === 'unlock' ? Math.min(1, game.ending.t / 120) : 0;
+      var bright = 0;
       ctx.fillStyle = 'rgba(255,176,0,' + (0.08 + bright * 0.2) + ')';
       ctx.fillRect(cb.x, cb.y, cb.w, cb.h);
       ctx.fillStyle = 'rgba(255,176,0,' + pulse + ')';
@@ -569,6 +599,11 @@
     ctx.fillStyle = burning ? '#ff8a7f' : '#fffaf0';
     ctx.fillRect(x, y, w, 1);
     TLK.PixelFont.draw(ctx, label, x + w / 2, y + 2, 1, COL.ink, 'center');
+    if (label === 'F' || label === 'J') {
+      // 손끝으로 찾을 수 있는 돌기
+      ctx.fillStyle = burning ? '#ffd0c8' : COL.amber;
+      ctx.fillRect(x + w / 2 - 2, y + 9, 4, 1);
+    }
     return w;
   };
 
@@ -683,14 +718,8 @@
     }
   };
 
-  Renderer.prototype.drawLighting = function (ctx, game, lights) {
+  Renderer.prototype.drawLighting = function (ctx, dark, lights) {
     var l = this.lctx;
-    var dark = this.stage ? this.stage.darkness : 0.8;
-    if (game.state === 'title') dark = 0.55;
-    if (game.state === 'ending' && game.ending) {
-      var e = game.ending;
-      if (e.type === 'unlock' || e.type === 'forward' || e.type === 'ascend') dark *= Math.max(0, 1 - e.t / 260);
-    }
     l.globalCompositeOperation = 'source-over';
     l.clearRect(0, 0, W / 2, H / 2);
     l.fillStyle = 'rgba(0,0,0,' + dark + ')';
@@ -720,53 +749,122 @@
     for (var y = (this.t * 3) % 6; y < H; y += 6) ctx.fillRect(0, y, W, 2);
   };
 
+  /** 엔딩 앞부분: 가장 깊은 곳이 어둠에 잠긴다 */
   Renderer.prototype.drawEnding = function (ctx, game) {
+    var t = game.ending.t;
+    var a = Math.max(0, Math.min(1, (t - 20) / 70));
+    ctx.fillStyle = 'rgba(0,0,0,' + a + ')';
+    ctx.fillRect(0, 0, W, H);
+  };
+
+  function rect(ctx, color, x, y, w, h) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, w, h);
+  }
+
+  /** 엔딩: 처음으로 보이는 '바깥'. 요양병원의 저녁, 키보드 앞의 재희와 옆의 솔 */
+  Renderer.prototype.drawOutside = function (ctx, game) {
     var e = game.ending;
     var t = e.t;
-    var cb = this.coreBox || { x: 0, y: 0, w: W, h: H };
-    var fade;
+    var lights = [];
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
 
-    if (e.type === 'forward') {
-      var open = Math.min(1, t / 60);
-      ctx.fillStyle = 'rgba(255,244,214,' + open + ')';
-      ctx.fillRect(cb.x + cb.w, cb.y + cb.h - 32 * open, 16, 32 * open);
-      fade = Math.max(0, (t - 170) / 120);
-      ctx.fillStyle = 'rgba(255,244,214,' + Math.min(1, fade) + ')';
-      ctx.fillRect(0, 0, W, H);
-    } else if (e.type === 'ascend') {
-      var beam = Math.min(1, t / 40);
-      ctx.fillStyle = 'rgba(255,244,214,' + 0.25 * beam + ')';
-      ctx.fillRect(Math.round(game.player.cx()) - 6, 0, 12, H);
-      fade = Math.max(0, (t - 160) / 130);
-      ctx.fillStyle = 'rgba(255,244,214,' + Math.min(1, fade) + ')';
-      ctx.fillRect(0, 0, W, H);
-    } else if (e.type === 'return') {
-      fade = Math.min(1, Math.max(0, (t - 60) / 200));
-      ctx.fillStyle = 'rgba(0,0,0,' + fade + ')';
-      ctx.fillRect(0, 0, W, H);
-    } else if (e.type === 'unlock') {
-      fade = Math.max(0, (t - 200) / 110);
-      ctx.fillStyle = 'rgba(255,244,214,' + Math.min(1, fade) + ')';
-      ctx.fillRect(0, 0, W, H);
-    } else if (e.type === 'rewind') {
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      for (var y = (t * 5) % 8; y < H; y += 8) ctx.fillRect(0, y, W, 3);
-      if (t % 7 < 2) {
-        var band = (t * 37) % H;
-        ctx.drawImage(this.canvas, 0, band, W, 12, (Math.random() - 0.5) * 16, band, W, 12);
-      }
-      fade = Math.max(0, (t - 180) / 120);
-      ctx.fillStyle = 'rgba(0,0,0,' + Math.min(1, fade) + ')';
-      ctx.fillRect(0, 0, W, H);
-    } else if (e.type === 'keep') {
-      fade = Math.min(0.92, t / 280);
-      ctx.fillStyle = 'rgba(0,0,0,' + fade + ')';
-      ctx.fillRect(0, 0, W, H);
-    } else {
-      fade = Math.min(1, t / 120);
-      ctx.fillStyle = 'rgba(0,0,0,' + fade + ')';
-      ctx.fillRect(0, 0, W, H);
+    // 벽과 바닥
+    rect(ctx, '#1d1a18', 0, 0, W, H);
+    rect(ctx, '#181614', 0, 150, W, 56);
+    rect(ctx, '#2a2521', 0, 206, W, 1);
+    rect(ctx, '#121010', 0, 207, W, H - 207);
+    for (var gx = 6; gx < W; gx += 24) rect(ctx, 'rgba(255,255,255,0.025)', gx, 0, 1, 150);
+
+    // 창문과 달
+    rect(ctx, '#2c2622', 40, 40, 100, 92);
+    rect(ctx, '#0c0f14', 44, 44, 92, 84);
+    rect(ctx, '#2c2622', 89, 44, 2, 84);
+    rect(ctx, '#2c2622', 44, 85, 92, 2);
+    rect(ctx, '#e8e4da', 112, 56, 6, 6);
+    rect(ctx, '#e8e4da', 111, 57, 8, 4);
+    rect(ctx, 'rgba(232,228,218,0.5)', 58, 62, 1, 1);
+    rect(ctx, 'rgba(232,228,218,0.4)', 70, 100, 1, 1);
+    rect(ctx, 'rgba(232,228,218,0.4)', 124, 106, 1, 1);
+    rect(ctx, '#2c2622', 36, 132, 108, 4);
+    lights.push({ x: 115, y: 60, r: 60, i: 0.35 });
+
+    // 책상
+    rect(ctx, '#3a3029', 150, 178, 236, 6);
+    rect(ctx, '#2a231e', 150, 184, 236, 2);
+    rect(ctx, '#2a231e', 160, 186, 6, 20);
+    rect(ctx, '#2a231e', 370, 186, 6, 20);
+
+    // 모니터
+    rect(ctx, '#2a2a2c', 268, 166, 10, 12);
+    rect(ctx, '#2a2a2c', 258, 176, 30, 2);
+    rect(ctx, '#2e2e31', 222, 104, 102, 64);
+    rect(ctx, '#0b0c0b', 226, 108, 94, 54);
+    var text = game.monitorText();
+    var flash = e.typed && t >= TLK.ENDING_TIMING.type && t < TLK.ENDING_TIMING.type + 20 ? 1 - (t - TLK.ENDING_TIMING.type) / 20 : 0;
+    if (flash > 0) rect(ctx, 'rgba(255,176,0,' + 0.35 * flash + ')', 226, 108, 94, 54);
+    ctx.fillStyle = '#e8e4da';
+    ctx.font = '700 26px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    var tw = text ? ctx.measureText(text).width : 0;
+    var tx = Math.round(273 - (tw + 6) / 2);
+    if (text) ctx.fillText(text, tx, 136);
+    if ((this.t >> 5) % 2 === 0) rect(ctx, '#e8e4da', tx + tw + 3, 124, 2, 24);
+    lights.push({ x: 273, y: 136, r: 120, i: 0.9 });
+
+    // 키보드: 글자가 다 닳은 키들
+    rect(ctx, '#55524c', 226, 172, 88, 6);
+    rect(ctx, '#77736b', 226, 172, 88, 1);
+    for (var kx = 229; kx < 312; kx += 6) {
+      rect(ctx, '#3e3b36', kx, 174, 4, 1);
+      rect(ctx, '#3e3b36', kx + 2, 176, 4, 1);
     }
+    var keyGlow = e.type === 'keep' ? 0.6 + Math.sin(this.t * 0.06) * 0.4 : flash;
+    if (keyGlow > 0) rect(ctx, 'rgba(255,176,0,' + keyGlow + ')', 247, 174, 4, 2);
+
+    // 의자와 재희 (흰 머리, 카디건) — 키보드를 향해 손을 뻗고 있다
+    rect(ctx, '#241f1c', 170, 146, 6, 60);
+    rect(ctx, '#241f1c', 170, 176, 30, 5);
+    rect(ctx, '#241f1c', 176, 181, 3, 25);
+    rect(ctx, '#241f1c', 194, 181, 3, 25);
+    rect(ctx, '#6b5a4a', 180, 140, 22, 38);
+    rect(ctx, '#5a4b3e', 180, 170, 22, 8);
+    rect(ctx, '#3a3236', 184, 178, 18, 6);
+    rect(ctx, '#3a3236', 198, 184, 6, 22);
+    rect(ctx, '#d9c3a8', 186, 120, 14, 18);
+    rect(ctx, '#e8e4da', 184, 116, 16, 8);
+    rect(ctx, '#e8e4da', 183, 122, 5, 16);
+    rect(ctx, '#0a0a0a', 196, 127, 1, 2);
+    var reach = Math.min(1, Math.max(0, (t - 150) / 70));
+    rect(ctx, '#6b5a4a', 200, 156, Math.round(10 + 18 * reach), 5);
+    rect(ctx, '#d9c3a8', 210 + Math.round(18 * reach), 157, 6, 4);
+
+    // 솔 (스무 살, 긴 머리) — 엄마 쪽을 보고 서 있다
+    rect(ctx, '#2a2a30', 340, 176, 5, 30);
+    rect(ctx, '#2a2a30', 348, 176, 5, 30);
+    rect(ctx, '#7a3a33', 336, 140, 22, 38);
+    rect(ctx, '#6a322c', 336, 170, 22, 8);
+    rect(ctx, '#d9c3a8', 339, 118, 15, 18);
+    rect(ctx, '#1a1412', 337, 114, 19, 8);
+    rect(ctx, '#1a1412', 352, 120, 5, 26);
+    rect(ctx, '#1a1412', 337, 120, 3, 8);
+    rect(ctx, '#0a0a0a', 341, 125, 1, 2);
+    rect(ctx, '#7a3a33', 326, 150, 12, 5);
+    rect(ctx, '#d9c3a8', 322, 150, 5, 4);
+    if (e.type === 'name' && t > TLK.ENDING_TIMING.type + 40) {
+      // 이름이 찍힌 뒤, 솔이 엄마 쪽으로 한 걸음 다가와 손을 얹는다
+      rect(ctx, '#d9c3a8', 316, 150, 6, 4);
+    }
+
+    // 조명: 모니터와 창문만 밝다
+    this.drawLighting(ctx, 0.62, lights);
+
+    // 시작 페이드 인
+    var fade = 1 - Math.min(1, (t - 100) / 70);
+    if (fade > 0) rect(ctx, 'rgba(0,0,0,' + fade + ')', 0, 0, W, H);
+    ctx.restore();
   };
 
   TLK.Renderer = Renderer;

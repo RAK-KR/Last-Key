@@ -22,6 +22,7 @@
     this.stations = [];
     this.lockers = [];
     this.exits = [];
+    this.fragments = [];
     this.spawn = { c: 1, r: 1 };
 
     this.parse(stage.map);
@@ -71,6 +72,9 @@
             break;
           case 'O':
             this.orbs.push({ c: c, r: r, on: false });
+            break;
+          case '*':
+            this.fragments.push({ c: c, r: r, taken: false });
             break;
           default:
             if (ch >= '1' && ch <= '9') {
@@ -152,7 +156,8 @@
       doors: this.doors.map(function (o) { return o.open; }),
       checkpoints: this.checkpoints.map(function (o) { return o.active; }),
       stations: this.stations.map(function (o) { return o.uses; }),
-      lockers: this.lockers.map(function (o) { return o.opened; })
+      lockers: this.lockers.map(function (o) { return o.opened; }),
+      fragments: this.fragments.map(function (o) { return o.taken; })
     };
   };
 
@@ -169,6 +174,7 @@
     apply(this.checkpoints, s.checkpoints, 'active');
     apply(this.stations, s.stations, 'uses');
     apply(this.lockers, s.lockers, 'opened');
+    apply(this.fragments, s.fragments, 'taken');
   };
 
   TLK.Level = Level;

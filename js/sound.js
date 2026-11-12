@@ -95,9 +95,9 @@
     src.stop(t0 + o.d + 0.05);
   };
 
-  Sound.prototype.arp = function (freqs, step, type, v, d) {
+  Sound.prototype.arp = function (freqs, step, type, v, d, offset) {
     for (var i = 0; i < freqs.length; i++) {
-      this.tone({ f: freqs[i], d: d || 0.18, type: type || 'triangle', v: v || 0.16, delay: i * step });
+      this.tone({ f: freqs[i], d: d || 0.18, type: type || 'triangle', v: v || 0.16, delay: (offset || 0) + i * step });
     }
   };
 
@@ -173,30 +173,34 @@
       case 'tick':
         this.tone({ f: 1200 + Math.random() * 600, d: 0.05, type: 'square', v: 0.035 });
         break;
-      case 'ending_forward':
-        this.arp([262, 330, 392, 523, 659, 784], 0.32, 'triangle', 0.14, 1.4);
+      case 'memory':
+        // 기억 조각: 오래된 오르골 같은 두 음
+        this.tone({ f: 784, d: 0.9, type: 'sine', v: 0.14, a: 0.01 });
+        this.tone({ f: 1175, d: 1.1, type: 'sine', v: 0.08, delay: 0.18 });
+        this.tone({ f: 988, d: 1.3, type: 'sine', v: 0.07, delay: 0.42 });
         break;
-      case 'ending_ascend':
-        this.arp([392, 494, 587, 784, 988, 1175], 0.28, 'sine', 0.16, 1.6);
+      case 'typekey':
+        // 바깥 장면: 진짜 키보드 한 번
+        this.noise({ d: 0.05, v: 0.35, type: 'bandpass', f: 2600, q: 3 });
+        this.tone({ f: 180, f2: 90, d: 0.08, type: 'square', v: 0.08 });
         break;
-      case 'ending_return':
-        this.arp([392, 330, 262, 196, 165], 0.4, 'triangle', 0.14, 1.6);
-        break;
-      case 'ending_unlock':
-        this.tone({ f: 131, d: 5, type: 'sine', v: 0.2, a: 0.8 });
-        this.arp([262, 392, 523, 659, 784, 1046, 1318, 1568], 0.35, 'triangle', 0.13, 1.8);
-        break;
-      case 'ending_rewind':
-        this.tone({ f: 2000, f2: 60, d: 2.2, type: 'sawtooth', v: 0.1 });
-        this.arp([784, 659, 523, 392, 262], 0.25, 'square', 0.07, 0.6);
+      case 'ending_name':
+        this.tone({ f: 131, d: 7, type: 'sine', v: 0.16, a: 1.2 });
+        this.arp([262, 330, 392, 523], 0.9, 'triangle', 0.1, 2.4);
+        this.arp([659, 784], 1.2, 'sine', 0.08, 3, 3.9);
         break;
       case 'ending_keep':
-        this.tone({ f: 220, d: 6, type: 'sine', v: 0.14, a: 1.5 });
-        this.tone({ f: 330, d: 6, type: 'sine', v: 0.08, a: 2 });
+        this.tone({ f: 220, d: 7, type: 'sine', v: 0.14, a: 1.5 });
+        this.tone({ f: 330, d: 7, type: 'sine', v: 0.08, a: 2 });
+        this.tone({ f: 440, d: 5, type: 'sine', v: 0.05, a: 2, delay: 2 });
         break;
-      case 'ending_empty':
-        this.tone({ f: 65, d: 4, type: 'sine', v: 0.22, a: 0.3 });
-        this.noise({ d: 3, v: 0.08, type: 'lowpass', f: 300, f2: 40 });
+      case 'ending_typo':
+        this.tone({ f: 147, d: 6, type: 'sine', v: 0.15, a: 1.2 });
+        this.arp([294, 349, 440, 392], 1, 'triangle', 0.09, 2.4);
+        break;
+      case 'ending_blank':
+        this.tone({ f: 65, d: 5, type: 'sine', v: 0.2, a: 0.6 });
+        this.noise({ d: 3, v: 0.06, type: 'lowpass', f: 300, f2: 40 });
         break;
     }
   };

@@ -10,6 +10,7 @@
       current: null, // { stage: 0~4, snapshot: 체크포인트 스냅샷 또는 null }
       endings: [], // 본 엔딩 id 목록
       runBurnt: 0, // 이번 여정에서 사용한 키 수
+      fragments: [false, false, false, false], // 이번 여정에서 모은 기억 조각 (스테이지 1~4)
       settings: { sound: true, volume: 70, shake: true }
     };
   }
@@ -34,7 +35,12 @@
         var parsed = JSON.parse(raw);
         if (typeof parsed.unlocked === 'number') data.unlocked = Math.max(1, Math.min(5, parsed.unlocked));
         if (parsed.current && typeof parsed.current.stage === 'number') data.current = parsed.current;
-        if (Array.isArray(parsed.endings)) data.endings = parsed.endings.slice();
+        if (Array.isArray(parsed.endings)) {
+          data.endings = parsed.endings.filter(function (id) {
+            return TLK.ENDING_ORDER ? TLK.ENDING_ORDER.indexOf(id) >= 0 : true;
+          });
+        }
+        if (Array.isArray(parsed.fragments) && parsed.fragments.length === 4) data.fragments = parsed.fragments.map(Boolean);
         if (typeof parsed.runBurnt === 'number') data.runBurnt = parsed.runBurnt;
         if (parsed.settings) {
           if (typeof parsed.settings.sound === 'boolean') data.settings.sound = parsed.settings.sound;

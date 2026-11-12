@@ -184,6 +184,67 @@
     linear-gradient(to top right, transparent calc(50% - 1px), #4a1714 calc(50% - 1px), #4a1714 calc(50% + 1px), transparent calc(50% + 1px));
 }
 
+/* 엔딩: 되살아난 키 */
+.key.revived {
+  background: #efe9da;
+  border-color: #fff4d6;
+  border-bottom-color: #9c968a;
+  color: #111;
+  transform: none;
+  animation: revive 0.7s ease-out;
+}
+
+.key.revived .k-act {
+  visibility: hidden;
+}
+
+.key.revived .k-crack {
+  display: none;
+}
+
+/* F, J 돌기: 눈을 감아도 찾을 수 있는 키 */
+.key.bump::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 14%;
+  width: 24%;
+  height: 2px;
+  transform: translateX(-50%);
+  background: currentColor;
+  opacity: 0.55;
+}
+
+#keyboard.bump-glow .key.bump::after {
+  background: var(--amber);
+  opacity: 1;
+  box-shadow: 0 0 6px var(--amber), 0 0 14px rgba(255, 176, 0, 0.8);
+  animation: bumpglow 1.4s ease-in-out infinite;
+}
+
+#keyboard.bump-glow .key.bump {
+  border-color: var(--amber);
+}
+
+/* 간직: 끝내 누르지 않은 키 */
+.key.kept {
+  border-color: var(--amber);
+  box-shadow: 0 0 calc(var(--u) * 0.5) rgba(255, 176, 0, 0.7);
+  animation: keptglow 2.4s ease-in-out infinite;
+}
+
+@keyframes bumpglow {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes keptglow {
+  50% {
+    box-shadow: 0 0 calc(var(--u) * 0.15) rgba(255, 176, 0, 0.3);
+  }
+}
+
 /* 복구 장치 / 코어 선택 대상 */
 .key.restorable {
   outline: 1px dashed var(--amber);

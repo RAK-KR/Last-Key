@@ -10,7 +10,9 @@
   --amber-dim: #6b4d10;
   --red: #ff4a3d;
   --panel: rgba(8, 8, 10, 0.92);
-  --font: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', 'Noto Sans Mono', monospace;
+  /* 영문은 고정폭, 한글은 일반 한글 글꼴 (윈도우에서 굴림체로 넘어가 자간이 벌어지는 문제 방지) */
+  --font: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', 'Malgun Gothic', '맑은 고딕',
+    'Apple SD Gothic Neo', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif;
 
   /* JS(ui.js)가 화면 크기에 맞춰 갱신 */
   --w: 960px;
@@ -363,20 +365,218 @@ kbd {
 .ending .panel {
   border-top-color: var(--pale);
   text-align: left;
+  width: min(94%, 38em);
+  font-size: calc(var(--fs) * 0.88);
+  padding: 0.9em 1.3em 0.7em;
 }
 
-.ending-unlock .panel {
+.ending .panel h1.big {
+  font-size: 1.6em;
+  margin-bottom: 0.15em;
+}
+
+.ending .hint {
+  display: none;
+}
+
+#overlay.ending {
+  padding: 1.5%;
+}
+
+.ending .menu,
+.story .menu {
+  margin-top: 0.5em;
+}
+
+.ending .menu li,
+.story .menu li {
+  padding-top: 0.25em;
+  padding-bottom: 0.25em;
+}
+
+
+/* ------------------------------------------------------------------ */
+/* 이야기 화면: 프롤로그, 편지, 기억 조각, 결말                          */
+/* ------------------------------------------------------------------ */
+
+.story .panel {
+  border-top-color: var(--pale);
+  width: min(94%, 36em);
+  font-size: calc(var(--fs) * 0.9);
+  padding: 0.9em 1.3em 0.7em;
+}
+
+.story-line {
+  opacity: 0;
+  margin: 0.35em 0;
+  line-height: 1.6;
+  animation: fadein 1.4s ease forwards;
+}
+
+.story-line.strong {
+  color: var(--amber);
+  font-size: 1.15em;
+}
+
+.story-line.sign {
+  text-align: right;
+  color: var(--pale-dim);
+}
+
+.story .menu,
+.story .hint {
+  opacity: 0;
+  animation: fadein 0.8s ease forwards;
+}
+
+.prologue .story-line:nth-child(2) {
+  letter-spacing: 0.05em;
+}
+
+.fragment {
+  margin: 0.7em 0 0.6em;
+  padding: 0.5em 0.8em;
+  border-left: 2px solid var(--amber);
+  background: rgba(255, 176, 0, 0.05);
+}
+
+.fragment p {
+  margin: 0.25em 0 0;
+  line-height: 1.7;
+}
+
+.frag-label {
+  color: var(--amber);
+  font-size: 0.75em;
+  letter-spacing: 0.12em;
+}
+
+.fragment.lost {
+  border-left-color: var(--dim);
+  background: transparent;
+}
+
+.fragment.lost .frag-label {
+  color: var(--dim);
+}
+
+.frag-note {
+  margin-top: 0.3em;
+  color: var(--dim);
+  font-size: 0.8em;
+}
+
+/* 지워진 문장: 글자 수만큼 검은 막대 */
+.redact {
+  color: transparent;
+  background: #2a2b30;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  line-height: 1.9;
+}
+
+/* 가장 깊은 곳의 메시지 */
+.core-msg {
+  text-align: center;
+  font-size: calc(var(--fs) * 1.05);
+  line-height: 1.8;
+  color: var(--pale-dim);
+  margin-bottom: 0.4em;
+}
+
+.core-name {
+  margin-top: 0.2em;
+  color: var(--pale);
+  font-size: 2em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.cursor {
+  display: inline-block;
+  width: 0.08em;
+  height: 0.9em;
+  margin-left: 0.06em;
+  vertical-align: -0.08em;
+  background: var(--pale);
+  animation: blink 1.1s steps(2) infinite;
+}
+
+.core-choice .core-msg {
+  margin-bottom: 0.8em;
+}
+
+#overlay.core .core-msg {
+  text-shadow: 0 0 10px #000, 0 0 4px #000;
+}
+
+.core-sub.hinted {
+  color: var(--amber);
+  animation: fadein 2s ease both;
+}
+
+.last-key.bump::after {
+  content: '';
+  width: 0.5em;
+  height: 0.08em;
+  margin-top: 0.08em;
+  background: #8a5a00;
+}
+
+/* 결말 카드 */
+#overlay.ending {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.ending .panel {
+  border-top-color: var(--pale);
+  text-align: left;
+  width: min(94%, 38em);
+  font-size: calc(var(--fs) * 0.88);
+  padding: 0.9em 1.3em 0.7em;
+}
+
+.ending .panel h1.big {
+  font-size: 1.6em;
+  margin-bottom: 0.15em;
+}
+
+.ending .hint {
+  display: none;
+}
+
+#overlay.ending {
+  padding: 1.5%;
+}
+
+.ending .menu,
+.story .menu {
+  margin-top: 0.5em;
+}
+
+.ending .menu li,
+.story .menu li {
+  padding-top: 0.25em;
+  padding-bottom: 0.25em;
+}
+
+.ending-name .panel,
+.ending-name.ending .panel {
   border-top-color: var(--amber);
 }
 
-.ending-name {
-  color: var(--amber);
-  margin-bottom: 0.6em;
+.ending .ending-text p {
+  margin: 0.3em 0;
+  line-height: 1.6;
 }
 
-.ending-text {
-  font-size: 1em;
-  line-height: 1.7;
+.ending .ending-text p.strong {
+  color: var(--amber);
+}
+
+.ending .ending-text p.sign {
+  text-align: right;
+  color: var(--pale-dim);
 }
 
 /* 좁은 화면(세로 모바일): 메뉴를 화면 전체로 넓혀 잘리지 않게 */

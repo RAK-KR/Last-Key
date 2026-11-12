@@ -79,7 +79,7 @@
       rowEl.className = 'kb-row kb-row-' + ri;
       row.forEach(function (id) {
         var el = document.createElement('div');
-        el.className = 'key locked' + (id.length > 1 ? ' wide key-' + id.toLowerCase() : '');
+        el.className = 'key locked' + (id.length > 1 ? ' wide key-' + id.toLowerCase() : '') + (id === 'F' || id === 'J' ? ' bump' : '');
         el.setAttribute('data-key', id);
         el.innerHTML = '<span class="k-label">' + id + '</span><span class="k-act"></span><span class="k-crack"></span>';
         rowEl.appendChild(el);
@@ -129,6 +129,33 @@
     }, 700);
   };
 
+  /** 엔딩 연출: 키를 행동 표시 없이 '되살아난' 모습으로 바꾼다 */
+  UI.prototype.reviveKey = function (id) {
+    var el = this.keyEls[id];
+    if (el) el.classList.add('revived');
+  };
+
+  UI.prototype.clearRevived = function () {
+    for (var id in this.keyEls) this.keyEls[id].classList.remove('revived');
+  };
+
+  /** 엔딩/편지 연출 흔적을 지운다 */
+  UI.prototype.resetKeyboardFx = function () {
+    for (var id in this.keyEls) this.keyEls[id].classList.remove('revived', 'kept');
+    this.keyboard.classList.remove('bump-glow');
+  };
+
+  /** 편지의 단서: F, J 돌기가 빛난다 */
+  UI.prototype.setBumpGlow = function (on) {
+    this.keyboard.classList.toggle('bump-glow', !!on);
+  };
+
+  /** 간직 엔딩: 끝내 누르지 않은 키 */
+  UI.prototype.markKept = function (id) {
+    var el = this.keyEls[id];
+    if (el) el.classList.add('kept');
+  };
+
   UI.prototype.markKeys = function (ids, selectedId) {
     for (var id in this.keyEls) {
       this.keyEls[id].classList.toggle('restorable', ids.indexOf(id) >= 0);
@@ -144,12 +171,13 @@
   // HUD / 메시지
   // ------------------------------------------------------------------
   UI.prototype.setHud = function (stage, remaining) {
-    var sig = stage.id + '|' + remaining;
+    var label = stage.hudLabel || '남은 키';
+    var sig = stage.id + '|' + remaining + '|' + label;
     if (sig === this.hudCache) return;
     this.hudCache = sig;
     this.hud.classList.remove('hidden');
     this.hudStage.innerHTML = '<b>STAGE ' + stage.id + '</b> ' + esc(stage.name);
-    this.hudKeys.innerHTML = '남은 키 <b>' + remaining + '</b>';
+    this.hudKeys.innerHTML = label + ' <b>' + remaining + '</b>';
     this.hudKeys.classList.toggle('low', remaining <= 1);
   };
 
@@ -326,12 +354,13 @@
 
     var chips = TLK.ENDING_ORDER.map(function (id) {
       var found = info.endings.indexOf(id) >= 0;
-      return '<span class="chip' + (found ? ' found' : '') + '">' + (found ? esc(TLK.ENDINGS[id].title) : '???') + '</span>';
+      return '<span class="chip' + (found ? ' found' : '') + '">' + (found ? esc(TLK.ENDINGS[id].name) : '???') + '</span>';
     }).join('');
 
     this.openMenu({
       cls: 'title',
-      header: '<div class="logo-wrap"></div><div class="subtitle">EVERY ACTION HAS A COST.</div>',
+      header: '<div class="logo-wrap"></div><div class="subtitle">' +
+        (info.endings.indexOf('name') >= 0 ? 'SOME WORDS ARE WORTH IT.' : 'EVERY ACTION HAS A COST.') + '</div>',
       items: items,
       footer: '<div class="endings"><div class="endings-label">엔딩 ' + info.endings.length + ' / ' + TLK.ENDING_ORDER.length + '</div>' + chips + '</div>'
     });
@@ -437,7 +466,7 @@
     this.openMenu({
       cls: 'intro',
       header:
-        '<div class="stage-no">STAGE ' + stage.id + ' / ' + TLK.STAGES.length + '</div>' +
+        '<div class="stage-no">STAGE ' + stage.id + ' / ' + TLK.STAGES.length + ' · ' + esc(stage.place) + '</div>' +
         '<h1>' + esc(stage.name) + '</h1>' +
         '<div class="intro-text">' + paras + '</div>' +
         '<div class="kchips">' + this.keyChips(keys) + '</div>' +
@@ -479,19 +508,75 @@
     });
   };
 
+  UI.prototype.fragmentHtml = function (frag, found) {
+    if (!frag) return '';
+    if (found) {
+      return '<div class="fragment"><div class="frag-label">기억 조각 · ' + esc(frag.date) + '</div><p>' + esc(frag.text) + '</p></div>';
+    }
+    return '<div class="fragment lost"><div class="frag-label">기억 조각 · 찾지 못함</div><p><span class="redact">' + esc(frag.text) + '</span></p>' +
+      '<div class="frag-note">이 기억은 지워졌습니다.</div></div>';
+  };
+
   UI.prototype.showClear = function (info) {
     var g = this.game;
     var items = [];
-    if (info.next) items.push({ label: '다음 스테이지', sub: 'STAGE ' + info.next.id + ' · ' + info.next.name, onSelect: function () { g.nextStage(); } });
+    if (info.next) items.push({ label: '다음으로', sub: 'STAGE ' + info.next.id + ' · ' + info.next.name, onSelect: function () { g.nextStage(); } });
     items.push({ label: '메인 메뉴', onSelect: function () { g.toTitle(); } });
     this.openMenu({
       cls: 'list clear',
       header:
-        '<div class="stage-no">STAGE ' + info.stage.id + ' · ' + esc(info.stage.name) + '</div>' +
+        '<div class="stage-no">STAGE ' + info.stage.id + ' · ' + esc(info.stage.name) + ' · ' + esc(info.stage.place) + '</div>' +
         '<h1 class="big">STAGE CLEAR</h1>' +
+        this.fragmentHtml(info.fragment, info.found) +
         '<p class="desc">사용한 키 <b>' + info.used + '</b>개 · 남긴 키 <b>' + info.left + '</b>개</p>',
       items: items
     });
+  };
+
+  /** 줄마다 시간차로 나타나는 이야기 화면 */
+  UI.prototype.storyLines = function (lines, step) {
+    return lines.map(function (l, i) {
+      var cls = 'story-line' + (l.strong ? ' strong' : '') + (l.sign ? ' sign' : '');
+      return '<p class="' + cls + '" style="animation-delay:' + (0.4 + i * step).toFixed(2) + 's">' + esc(l.t) + '</p>';
+    }).join('');
+  };
+
+  UI.prototype.showPrologue = function (done) {
+    var lines = TLK.PROLOGUE.map(function (t) { return { t: t }; });
+    this.openMenu({
+      cls: 'list story prologue',
+      header: this.storyLines(lines, 1.6),
+      items: [{ label: '깨어나기', onSelect: done }]
+    });
+    this.delayMenu(0.4 + lines.length * 1.6);
+  };
+
+  UI.prototype.showLetter = function (done, onOpen) {
+    var self = this;
+    var step = 2.2;
+    var lines = TLK.LETTER;
+    this.openMenu({
+      cls: 'list story letter',
+      header: '<div class="stage-no">맨 마지막 서랍에서 발견한 편지</div>' + this.storyLines(lines, step),
+      items: [{ label: '가장 깊은 곳으로', onSelect: done }]
+    });
+    this.delayMenu(0.4 + lines.length * step);
+    if (onOpen) onOpen();
+    lines.forEach(function (l, i) {
+      if (!l.bump) return;
+      clearTimeout(self._bumpT);
+      self._bumpT = setTimeout(function () {
+        if (self.overlay.classList.contains('letter')) self.setBumpGlow(true);
+      }, (0.4 + i * step) * 1000);
+    });
+  };
+
+  /** 이야기 화면에서는 글이 다 나온 뒤에 메뉴가 나타난다 */
+  UI.prototype.delayMenu = function (sec) {
+    var menu = this.overlay.querySelector('.menu');
+    if (menu) menu.style.animationDelay = sec.toFixed(2) + 's';
+    var hint = this.overlay.querySelector('.hint');
+    if (hint) hint.style.animationDelay = sec.toFixed(2) + 's';
   };
 
   UI.prototype.showRestore = function (st, list) {
@@ -505,7 +590,7 @@
     items.push({ label: '사용하지 않음', onSelect: function () { g.closeStation(); } });
     this.openMenu({
       cls: 'list station',
-      header: '<h2>복구 장치</h2><p class="desc">사라진 키 하나를 되살립니다. 남은 사용 횟수: ' + st.uses + '</p>',
+      header: '<h2>사진</h2><p class="desc">사진 속 얼굴을 보면 사라진 키 하나가 되살아납니다. 남은 사용 횟수: ' + st.uses + '</p>',
       items: items,
       onBack: function () { g.closeStation(); }
     });
@@ -551,27 +636,33 @@
     this.showText('core', '<div class="core-text">' + esc(text) + '</div>');
   };
 
+  /** 끝내 보내지 못한 메시지 */
+  UI.prototype.coreMessageHtml = function () {
+    return '<div class="core-msg">' + TLK.CORE_MESSAGE.map(function (l) { return '<div>' + esc(l) + '</div>'; }).join('') +
+      '<div class="core-name">' + esc(TLK.CORE_PREFIX) + '<span class="cursor"></span></div></div>';
+  };
+
   UI.prototype.showCoreChoice = function (list) {
     var g = this.game;
     var items = list.map(function (k) {
       return {
-        label: k.id, sub: TLK.ACTIONS[k.action].name, keyId: k.id,
+        label: k.id, sub: TLK.JAMO[k.id] || '', keyId: k.id,
         onSelect: function () { g.coreChoose(k.id); }
       };
     });
     this.openMenu({
       cls: 'list core-choice',
-      header: '<h2>단 하나만 가지고 나갈 수 있습니다</h2><p class="desc">고르지 않은 키는 모두 타 버립니다. 마지막 키가 무엇을 하는 키인지에 따라 끝이 달라집니다.</p>',
+      header: this.coreMessageHtml() + '<h2>단 하나만 가지고 나갈 수 있습니다</h2><p class="desc">고르지 않은 단어는 모두 타 버립니다.</p>',
       items: items,
       onBack: function () { g.pause(); }
     });
   };
 
-  UI.prototype.showAwait = function (key) {
+  UI.prototype.showAwait = function (key, hinted) {
     this.showText('core await',
-      '<div class="core-text">마지막 키</div>' +
-      '<div class="last-key" data-key="' + key.id + '"><span>' + key.id + '</span><small>' + esc(TLK.ACTIONS[key.action].name) + '</small></div>' +
-      '<div class="core-sub">누르세요.</div>');
+      this.coreMessageHtml() +
+      '<div class="last-key' + (key.id === 'F' || key.id === 'J' ? ' bump' : '') + '" data-key="' + key.id + '"><span>' + key.id + '</span><small>' + esc(TLK.JAMO[key.id] || '') + '</small></div>' +
+      '<div class="core-sub' + (hinted ? ' hinted' : '') + '">' + (hinted ? '쓰면 사라진다.' : '누르세요.') + '</div>');
     var el = this.overlay.querySelector('.last-key');
     this.input.bindVirtualKey(el, key.id);
     this.markKeys([key.id], key.id);
@@ -579,13 +670,25 @@
 
   UI.prototype.showEnding = function (e) {
     var g = this.game;
+    var d = e.data;
+    var body = '';
+    if (e.id === 'typo') {
+      var v = d.variants[e.key] || d.variants.other;
+      body = v.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('');
+    } else {
+      body = d.lines.map(function (l) {
+        var lost = l.f !== undefined && !e.fragments[l.f];
+        return '<p class="' + (l.strong ? 'strong' : '') + '">' + (lost ? '<span class="redact">' + esc(l.t) + '</span>' : esc(l.t)) + '</p>';
+      }).join('');
+    }
+    var missing = e.id === 'name' ? e.fragments.filter(function (f) { return !f; }).length : 0;
     this.openMenu({
       cls: 'list ending ending-' + e.id,
       header:
-        '<div class="stage-no">ENDING</div>' +
-        '<h1 class="big">' + esc(e.data.title) + '</h1>' +
-        '<div class="ending-name">' + esc(e.data.name) + '</div>' +
-        '<p class="ending-text">' + esc(e.data.text) + '</p>' +
+        '<div class="stage-no">ENDING · ' + esc(d.title) + '</div>' +
+        '<h1 class="big">' + esc(d.name) + '</h1>' +
+        '<div class="ending-text">' + body + '<p class="sign">' + esc(d.sign) + '</p></div>' +
+        (missing ? '<p class="desc">기억 조각 ' + (4 - missing) + ' / 4 — 지워진 문장은 조각을 모두 모으면 읽을 수 있습니다.</p>' : '') +
         '<p class="desc">엔딩 ' + e.found + ' / ' + e.total + ' · 이번 여정에서 사용한 키 ' + e.burnt + '개</p>',
       items: [
         { label: '처음부터 다시', onSelect: function () { g.newGame(); } },

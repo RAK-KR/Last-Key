@@ -1,7 +1,8 @@
 /* THE LAST KEY — 게임 진행 상태와 규칙
  *
- * 상태: title → intro → play ⇄ paused / station → clear → (다음 스테이지)
- *                         ↘ gameover
+ * 상태: title → prologue → intro → play ⇄ paused / station → clear → (다음 스테이지)
+ *                                   ↘ gameover
+ *       4스테이지 클리어 후: letter (편지)
  *       마지막 스테이지: play → core → ending
  */
 (function () {
@@ -10,10 +11,10 @@
   var C = TLK.C;
   var T = C.TILE;
 
-  var CORE_LINES = [
-    '여기가 코어입니다.',
-    '이곳에서는 단 하나의 키만 가지고 나갈 수 있습니다.'
-  ];
+  // 엔딩 연출 길이(프레임). 이 시점에 결과 카드가 뜬다.
+  var ENDING_CARD_AT = 450;
+  var TYPE_AT = 230; // 바깥 장면에서 마지막 글자가 찍히는 시점
+  var KEEP_HINT_AT = 600; // 코어에서 "쓰면 사라진다." 로 문구가 바뀌는 시점
 
   function Game(deps) {
     this.ui = deps.ui;
@@ -45,7 +46,6 @@
     this.core = null;
     this.ending = null;
     this.deathReason = null;
-    this.arrowHintT = 0;
 
     this.keys.on(this.onKeyEvent.bind(this));
   }
@@ -82,6 +82,10 @@
     this.persist();
   };
 
+  Game.prototype.fragmentCount = function () {
+    return this.save.fragments.filter(function (f) { return f; }).length;
+  };
+
   // ------------------------------------------------------------------
   // 화면 전환
   // ------------------------------------------------------------------
@@ -91,6 +95,7 @@
     this.stage = TLK.STAGES[0];
     this.level = new TLK.Level(this.stage);
     this.keys.reset({ keys: {} });
+    this.ui.resetKeyboardFx();
     this.player.placeAtTile(this.level.spawn.c, this.level.spawn.r);
     this.player.hidden = true;
     this.resetRuntime();
@@ -111,10 +116,15 @@
   };
 
   Game.prototype.newGame = function () {
+    var self = this;
     this.save.runBurnt = 0;
+    this.save.fragments = [false, false, false, false];
     this.save.current = { stage: 0, snapshot: null };
     this.persist();
-    this.loadStage(0, null, false);
+    this.state = 'prologue';
+    this.ui.showPrologue(function () {
+      self.loadStage(0, null, false);
+    });
   };
 
   Game.prototype.continueGame = function () {
@@ -132,6 +142,7 @@
     this.stage = TLK.STAGES[index];
     this.level = new TLK.Level(this.stage);
     this.keys.reset({ keys: this.stage.keys, burnAllOthers: !!this.stage.burnAllOthers });
+    this.ui.resetKeyboardFx();
     this.player.placeAtTile(this.level.spawn.c, this.level.spawn.r);
     this.checkpointSnap = null;
     if (snapshot) {
@@ -169,6 +180,7 @@
     this.ending = null;
     this.deathReason = null;
     this.stageUsed = 0;
+    this.player.alpha = 1;
     this.renderer.clearFx();
   };
 
@@ -193,8 +205,21 @@
   };
 
   Game.prototype.nextStage = function () {
-    if (this.stageIndex + 1 < TLK.STAGES.length) this.loadStage(this.stageIndex + 1, null, false);
-    else this.goTitle();
+    var self = this;
+    var next = this.stageIndex + 1;
+    if (next >= TLK.STAGES.length) return this.goTitle();
+    if (this.stageIndex === 3) {
+      // 4스테이지를 마치면 편지를 읽는다 (반전)
+      this.state = 'letter';
+      this.sound.stopDrone();
+      this.ui.showLetter(function () {
+        self.loadStage(next, null, false);
+      }, function () {
+        self.sound.play('core');
+      });
+      return;
+    }
+    this.loadStage(next, null, false);
   };
 
   Game.prototype.pause = function () {
@@ -299,12 +324,8 @@
         break;
 
       case 'jump':
-        if (this.player.canJump()) {
-          this.doJump(id);
-        } else {
-          // 공중에서 누른 점프는 착지 직전이면 예약, 아니면 소모되지 않는다
-          this.pendingJump = { id: id, t: C.JUMP_BUFFER };
-        }
+        if (this.player.canJump()) this.doJump(id);
+        else this.pendingJump = { id: id, t: C.JUMP_BUFFER };
         break;
 
       case 'interact':
@@ -414,7 +435,7 @@
   };
 
   // ------------------------------------------------------------------
-  // 장치: 복구 장치 / 제단
+  // 장치: 사진(복구) / 제단
   // ------------------------------------------------------------------
   Game.prototype.tryStation = function () {
     var st = this.stationHere;
@@ -453,7 +474,7 @@
     st.uses--;
     this.sound.play('restore');
     this.renderer.sparkle(st.c * T + 8, st.r * T + 4);
-    this.setMsg(id + ' 키가 되살아났습니다. (' + TLK.ACTIONS[this.keys.get(id).action].name + ')', 180);
+    this.setMsg('사진 속 얼굴을 보자 ' + id + ' 키가 되살아났습니다. (' + TLK.ACTIONS[this.keys.get(id).action].name + ')', 180);
     this.closeStation();
   };
 
@@ -504,7 +525,6 @@
     var keys = this.keys;
     var self = this;
 
-    // 점프 예약 처리
     if (this.pendingJump) {
       var pj = this.pendingJump;
       if (p.canJump() && keys.get(pj.id).state === 'available') {
@@ -536,7 +556,17 @@
         keys.grant(pk.key, pk.action);
         self.sound.play('pickup');
         self.renderer.sparkle(pk.c * T + 8, pk.r * T + 8);
-        self.setMsg(pk.key + ' 키를 얻었습니다. (' + TLK.ACTIONS[pk.action].name + ')', 180);
+        if (pk.key === 'F') self.setMsg('돌기가 있는 키, F를 얻었습니다. (점프) 쓰면 사라집니다.', 240);
+        else self.setMsg(pk.key + ' 키를 얻었습니다. (' + TLK.ACTIONS[pk.action].name + ')', 180);
+      }
+    });
+
+    lv.fragments.forEach(function (f) {
+      if (!f.taken && p.overlapsTile(f.c, f.r)) {
+        f.taken = true;
+        self.sound.play('memory');
+        self.renderer.sparkle(f.c * T + 8, f.r * T + 8);
+        self.setMsg('기억 조각을 주웠습니다. 출구에 닿으면 읽을 수 있습니다.', 180);
       }
     });
 
@@ -620,13 +650,19 @@
     var list = this.stage.messages || [];
     var c = Math.floor(this.player.cx() / T);
     var r = Math.floor(this.player.cy() / T);
+    var lv = this.level;
     for (var i = 0; i < list.length; i++) {
       var m = list[i];
       var r0 = m.r0 === undefined ? 0 : m.r0;
       var r1 = m.r1 === undefined ? C.ROWS : m.r1;
       if (c < m.c0 || c > m.c1 || r < r0 || r > r1) continue;
-      if (m.when === 'signalOn' && !this.level.signal) continue;
-      if (m.when === 'signalOff' && this.level.signal) continue;
+      if (m.when === 'signalOn' && !lv.signal) continue;
+      if (m.when === 'signalOff' && lv.signal) continue;
+      if (m.when === 'fragment' && !lv.fragments.some(function (f) { return f.taken; })) continue;
+      if (m.when === 'hasF') {
+        var f = this.keys.get('F');
+        if (!f || f.state !== 'available') continue;
+      }
       return m.text;
     }
     return '';
@@ -639,7 +675,7 @@
       text = this.msg.text;
     } else if (this.stationHere && this.stationHere.uses > 0) {
       text = this.stationHere.type === 'restore'
-        ? '[ENTER] 복구 장치 — 사라진 키 하나를 되살립니다. (남은 횟수 ' + this.stationHere.uses + ')'
+        ? '[ENTER] 사진 — 사라진 키 하나를 되살립니다. (남은 횟수 ' + this.stationHere.uses + ')'
         : '[ENTER] 제단 — 남은 키 하나를 바치고 사라진 키 하나를 되살립니다.';
     } else {
       text = this.zoneMessage();
@@ -667,7 +703,12 @@
     this.player.hidden = true;
     this.renderer.burst(this.player.cx(), this.player.cy(), 30, ['#fff4d6', '#ffb000']);
     this.sound.play('clear');
-    var next = this.stageIndex + 1;
+
+    var i = this.stageIndex;
+    var found = this.level.fragments.some(function (f) { return f.taken; });
+    if (found && i < this.save.fragments.length) this.save.fragments[i] = true;
+
+    var next = i + 1;
     this.save.unlocked = Math.max(this.save.unlocked, Math.min(TLK.STAGES.length, next + 1));
     this.save.current = next < TLK.STAGES.length ? { stage: next, snapshot: null } : null;
     this.persist();
@@ -676,32 +717,39 @@
       stage: this.stage,
       used: this.stageUsed,
       left: this.keys.count('available'),
-      next: TLK.STAGES[next] || null
+      next: TLK.STAGES[next] || null,
+      fragment: TLK.FRAGMENTS[i] || null,
+      found: found || !!this.save.fragments[i],
+      foundNow: found
     });
   };
 
   // ------------------------------------------------------------------
-  // 마지막 스테이지: 코어
+  // 마지막 스테이지: 가장 깊은 곳
   // ------------------------------------------------------------------
   Game.prototype.enterCore = function () {
     this.state = 'core';
     this.keys.releaseAll();
     this.pendingJump = null;
     this.player.vx = 0;
-    this.core = { phase: 'text', t: 0, line: 0, last: null, toBurn: [] };
+    var n = this.keys.count('available');
+    var lines = ['여기가 가장 깊은 곳입니다.'];
+    lines.push(n > 0 ? '그녀에게 남은 단어는 ' + n + '개입니다.' : '그녀에게 남은 단어가 없습니다.');
+    if (n >= 2) lines.push('단 하나만 가지고 나갈 수 있습니다.');
+    this.core = { phase: 'text', t: 0, line: 0, lines: lines, last: null, toBurn: [], hinted: false };
     this.ui.setMessage('');
     this.sound.play('core');
     this.renderer.shake(4, 20);
-    this.ui.showCoreText(CORE_LINES[0]);
+    this.ui.showCoreText(lines[0]);
   };
 
   Game.prototype.refreshCoreUI = function () {
     var core = this.core;
     if (!core) return;
-    if (core.phase === 'text') this.ui.showCoreText(CORE_LINES[Math.min(core.line, CORE_LINES.length - 1)]);
+    if (core.phase === 'text') this.ui.showCoreText(core.lines[Math.min(core.line, core.lines.length - 1)]);
     else if (core.phase === 'choose') this.ui.showCoreChoice(this.keys.list('available', true));
-    else if (core.phase === 'burn') this.ui.showCoreText('나머지 키가 타오릅니다.');
-    else if (core.phase === 'await') this.ui.showAwait(core.last);
+    else if (core.phase === 'burn') this.ui.showCoreText('나머지 단어가 타오릅니다.');
+    else if (core.phase === 'await') this.ui.showAwait(core.last, core.hinted);
   };
 
   Game.prototype.updateCore = function () {
@@ -712,11 +760,8 @@
     if (core.phase === 'text') {
       if (core.t % 150 === 0) {
         core.line++;
-        if (core.line < CORE_LINES.length) {
-          this.ui.showCoreText(CORE_LINES[core.line]);
-        } else {
-          this.afterCoreText();
-        }
+        if (core.line < core.lines.length) this.ui.showCoreText(core.lines[core.line]);
+        else this.afterCoreText();
       }
     } else if (core.phase === 'burn') {
       if (core.t % 36 === 0) {
@@ -728,11 +773,15 @@
         } else {
           core.phase = 'await';
           core.t = 0;
-          this.ui.showAwait(core.last);
+          this.ui.showAwait(core.last, false);
         }
       }
     } else if (core.phase === 'await') {
-      if (core.t >= C.CORE_KEEP_FRAMES) this.startEnding('keep');
+      if (core.t === KEEP_HINT_AT) {
+        core.hinted = true;
+        this.ui.showAwait(core.last, true);
+      }
+      if (core.t >= C.CORE_KEEP_FRAMES) this.startEnding(core.last.id === 'F' ? 'keep' : 'blank', null);
     }
   };
 
@@ -740,19 +789,19 @@
     var core = this.core;
     var avail = this.keys.list('available', true);
     if (avail.length === 0) {
-      this.startEnding('empty');
+      this.startEnding('blank', null);
     } else if (avail.length === 1) {
       core.last = avail[0];
       core.phase = 'await';
       core.t = 0;
-      this.ui.showAwait(core.last);
+      this.ui.showAwait(core.last, false);
     } else {
       core.phase = 'choose';
       this.ui.showCoreChoice(avail);
     }
   };
 
-  /** 코어에서 가지고 나갈 키 선택 (UI에서 호출) */
+  /** 가지고 나갈 마지막 키 선택 (UI에서 호출) */
   Game.prototype.coreChoose = function (id) {
     var core = this.core;
     if (!core || core.phase !== 'choose') return;
@@ -764,7 +813,7 @@
     });
     core.phase = 'burn';
     core.t = 0;
-    this.ui.showCoreText('나머지 키가 타오릅니다.');
+    this.ui.showCoreText('나머지 단어가 타오릅니다.');
   };
 
   Game.prototype.handleCoreKey = function (id) {
@@ -776,7 +825,7 @@
       this.stageUsed++;
       this.save.runBurnt++;
       if (!this.input.isDown(id)) this.keys.release(id);
-      this.startEnding(TLK.ACTION_TO_ENDING[core.last.action]);
+      this.startEnding(id === 'F' ? 'name' : 'typo', id);
     } else {
       var k = this.keys.get(id);
       if (k) this.ui.flashKey(id, 'denied');
@@ -784,11 +833,13 @@
   };
 
   // ------------------------------------------------------------------
-  // 엔딩
+  // 엔딩: 처음으로 '바깥'이 보인다
   // ------------------------------------------------------------------
-  Game.prototype.startEnding = function (type) {
+  Game.prototype.startEnding = function (type, keyId) {
     this.state = 'ending';
-    this.ending = { type: type, t: 0, reviveOrder: null };
+    var typed = '';
+    if (type === 'name' || type === 'typo') typed = TLK.TYPED[keyId] || (TLK.CORE_PREFIX + (TLK.JAMO[keyId] || ''));
+    this.ending = { type: type, key: keyId, t: 0, typed: typed };
     if (this.save.endings.indexOf(type) < 0) this.save.endings.push(type);
     this.save.current = null;
     this.persist();
@@ -796,44 +847,34 @@
     this.ui.setMessage('');
     this.ui.hideHud();
     this.sound.stopDrone();
+    if (type === 'keep') this.ui.markKept('F');
     this.sound.play('ending_' + type);
   };
 
   Game.prototype.updateEnding = function () {
     var e = this.ending;
-    var p = this.player;
     e.t++;
-
-    if (e.type === 'forward' && e.t > 50) {
-      p.facing = 1;
-      p.x += 0.8;
-      p.anim++;
-    } else if (e.type === 'return' && e.t > 50) {
-      p.facing = -1;
-      p.x -= 0.8;
-      p.anim++;
-    } else if (e.type === 'ascend' && e.t > 40) {
-      p.y -= Math.min(3.5, (e.t - 40) * 0.04);
-    } else if ((e.type === 'unlock' || e.type === 'rewind') && e.t > 40) {
-      if (!e.reviveOrder) {
-        e.reviveOrder = TLK.ALL_KEYS.slice();
-        if (e.type === 'rewind') e.reviveOrder.reverse();
-      }
-      if (e.t % 4 === 0 && e.reviveOrder.length) {
-        this.keys.reviveVisual(e.reviveOrder.shift());
-        this.sound.play('tick');
-      }
-    }
-
-    if (e.t === 330) {
+    if (e.t === TYPE_AT && e.typed) this.sound.play('typekey');
+    if (e.t === ENDING_CARD_AT) {
       this.ui.showEnding({
         id: e.type,
+        key: e.key,
         data: TLK.ENDINGS[e.type],
+        fragments: this.save.fragments.slice(),
         found: this.save.endings.length,
         total: TLK.ENDING_ORDER.length,
         burnt: this.save.runBurnt
       });
     }
+  };
+
+  /** 바깥 장면의 모니터에 지금 보이는 글자 */
+  Game.prototype.monitorText = function () {
+    var e = this.ending;
+    if (!e) return '';
+    if (e.type === 'blank') return '';
+    if (e.typed && e.t >= TYPE_AT) return e.typed;
+    return TLK.CORE_PREFIX;
   };
 
   // ------------------------------------------------------------------
@@ -862,4 +903,5 @@
   };
 
   TLK.Game = Game;
+  TLK.ENDING_TIMING = { card: ENDING_CARD_AT, type: TYPE_AT };
 })();
